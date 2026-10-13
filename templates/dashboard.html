@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard | {{ active_tenant.name }} | DocuRAG{% endblock %}
+{% block page_title %}Overview & Metrics{% endblock %}
+
+{% block content %}
+<div class="space-y-8 max-w-7xl mx-auto">
+
+    <!-- Header Banner -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-slate-800 shadow-xl">
+        <div>
+            <div class="flex items-center gap-3">
+                <h1 class="text-2xl font-bold text-white tracking-tight">{{ active_tenant.name }}</h1>
+                <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-500/20 text-brand-300 border border-brand-500/30">
+                    {{ active_tenant.plan }} Plan
+                </span>
+            </div>
+            <p class="text-sm text-slate-400 mt-1">
+                Multi-Tenant RAG engine with PostgreSQL pgvector and asynchronous Celery ingestion.
+            </p>
+        </div>
+        <div class="flex items-center gap-3">
+            <a href="{% url 'web:documents' %}" 
+               class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium border border-slate-700 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                <span>Upload Document</span>
+            </a>
+            <a href="{% url 'web:chat' %}" 
+               class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-sm font-medium shadow-lg shadow-brand-600/30 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+                <span>Launch Query Chat</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Core Metrics Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <!-- Card 1: Documents Indexed -->
+        <div class="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-sm hover:border-slate-700 transition">
+            <div class="flex items-center justify-between text-slate-400 text-sm font-medium">
+                <span>Documents Indexed</span>
+                <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                </div>
+            </div>
+            <div class="mt-3 flex items-baseline gap-2">
+                <span class="text-3xl font-bold text-white font-mono">{{ ready_docs }}</span>
+                <span class="text-xs text-slate-500 font-medium">/ {{ total_docs }} total</span>
+            </div>
+            <div class="mt-2 text-xs text-emerald-400 flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                <span>{{ ready_docs }} ready for RAG query</span>
+            </div>
+        </div>
+
+        <!-- Card 2: Total Vector Chunks -->
+        <div class="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-sm hover:border-slate-700 transition">
+            <div class="flex items-center justify-between text-slate-400 text-sm font-medium">
+                <span>pgvector Chunks</span>
+                <div class="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2 1.5 3 3.5 3h9c2 0 3.5-1 3.5-3V7c0-2-1.5-3-3.5-3h-9C5.5 4 4 5 4 7z"/></svg>
+                </div>
+            </div>
+            <div class="mt-3">
+                <span class="text-3xl font-bold text-white font-mono">{{ total_chunks }}</span>
+            </div>
+            <div class="mt-2 text-xs text-slate-400 flex items-center gap-1.5">
+                <span>HNSW index: 1536 dims</span>
+            </div>
+        </div>
+
+        <!-- Card 3: Queries Executed -->
+        <div class="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-sm hover:border-slate-700 transition">
+            <div class="flex items-center justify-between text-slate-400 text-sm font-medium">
+                <span>Total Queries</span>
+                <div class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                </div>
+            </div>
+            <div class="mt-3">
+                <span class="text-3xl font-bold text-white font-mono">{{ total_queries }}</span>
+            </div>
+            <div class="mt-2 text-xs text-slate-400 flex items-center gap-1.5">
+                <span>Isolated tenant audit log</span>
+            </div>
+        </div>
+
+        <!-- Card 4: Token Quota Usage -->
+        <div class="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-sm hover:border-slate-700 transition">
+            <div class="flex items-center justify-between text-slate-400 text-sm font-medium">
+                <span>Token Usage Quota</span>
+                <span class="text-xs font-semibold px-2 py-0.5 rounded bg-brand-500/20 text-brand-300">
+                    {{ token_percent }}%
+                </span>
+            </div>
+            <div class="mt-3 flex items-baseline gap-1 font-mono">
+                <span class="text-2xl font-bold text-white">{{ tokens_consumed|default:0 }}</span>
+                <span class="text-xs text-slate-500">/ {{ monthly_limit }}</span>
+            </div>
+            <!-- Progress bar -->
+            <div class="mt-3 w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                <div class="h-2 rounded-full transition-all duration-500 {% if token_percent > 85 %}bg-rose-500{% elif token_percent > 60 %}bg-amber-500{% else %}bg-brand-500{% endif %}" 
+                     style="width: {{ token_percent }}%;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Two-column Section: Recent Documents & Recent Query Logs -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        
+        <!-- Recent Documents Column -->
+        <div class="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-base font-semibold text-white">Indexed Documents</h2>
+                    <p class="text-xs text-slate-400">Current status in vector repository</p>
+                </div>
+                <a href="{% url 'web:documents' %}" class="text-xs font-medium text-brand-400 hover:text-brand-300">View All &rarr;</a>
+            </div>
+
+            <div class="divide-y divide-slate-800">
+                {% for doc in recent_documents %}
+                <div class="py-3.5 flex items-center justify-between">
+                    <div class="flex items-center gap-3 truncate">
+                        <div class="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-300 uppercase text-[10px] font-bold">
+                            {{ doc.file_type }}
+                        </div>
+                        <div class="truncate">
+                            <div class="text-sm font-medium text-white truncate">{{ doc.title }}</div>
+                            <div class="text-xs text-slate-500 flex items-center gap-2">
+                                <span>{{ doc.file_size_display }}</span>
+                                <span>&bull;</span>
+                                <span>{{ doc.total_chunks }} chunks</span>
+                                <span>&bull;</span>
+                                <span>Page count: {{ doc.total_pages }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        {% if doc.status == 'ready' %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            Ready
+                        </span>
+                        {% elif doc.status == 'processing' %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 animate-pulse">
+                            Processing
+                        </span>
+                        {% elif doc.status == 'failed' %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                            Failed
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                            Pending
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% empty %}
+                <div class="py-8 text-center text-slate-500 text-sm">
+                    No documents uploaded yet for this tenant. 
+                    <a href="{% url 'web:documents' %}" class="text-brand-400 hover:underline">Upload your first document</a>.
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Recent Queries Column -->
+        <div class="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-base font-semibold text-white">Recent Query Audit Logs</h2>
+                    <p class="text-xs text-slate-400">Natural language searches & citations</p>
+                </div>
+                <a href="{% url 'web:chat' %}" class="text-xs font-medium text-brand-400 hover:text-brand-300">Open Chat &rarr;</a>
+            </div>
+
+            <div class="space-y-3">
+                {% for q in recent_queries %}
+                <div class="p-3.5 rounded-xl bg-slate-800/40 border border-slate-800 hover:border-slate-700 transition">
+                    <div class="flex items-center justify-between text-xs text-slate-400 mb-1.5">
+                        <span class="font-mono text-[11px] text-brand-400">{{ q.tokens_used }} tokens</span>
+                        <span>{{ q.latency_ms }} ms &bull; {{ q.created_at|timesince }} ago</span>
+                    </div>
+                    <div class="text-sm font-medium text-slate-200 line-clamp-1">
+                        "{{ q.question }}"
+                    </div>
+                    <div class="text-xs text-slate-400 line-clamp-1 mt-1 text-slate-400">
+                        {{ q.answer }}
+                    </div>
+                </div>
+                {% empty %}
+                <div class="py-8 text-center text-slate-500 text-sm">
+                    No queries performed yet. 
+                    <a href="{% url 'web:chat' %}" class="text-brand-400 hover:underline">Ask a question</a>.
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+    </div>
+
+</div>
+{% endblock %}

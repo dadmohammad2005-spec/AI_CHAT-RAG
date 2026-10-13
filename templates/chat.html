@@ -1,0 +1,317 @@
+{% extends "base.html" %}
+
+{% block title %}AI Chat & RAG Query | {{ active_tenant.name }} | DocuRAG{% endblock %}
+{% block page_title %}AI Query Engine{% endblock %}
+
+{% block content %}
+<div class="h-full flex flex-col max-w-5xl mx-auto" x-data="ragChat()">
+
+    <!-- Top Tenant Context Banner -->
+    <div class="mb-4 flex items-center justify-between px-4 py-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-xs">
+        <div class="flex items-center gap-2 text-slate-300">
+            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <span>Query scope strictly isolated to:</span>
+            <span class="font-semibold text-white">{{ active_tenant.name }}</span>
+            <span class="text-slate-500">({{ ready_docs.count }} indexed documents ready)</span>
+        </div>
+        <div class="flex items-center gap-3 text-slate-400">
+            <span>Cosine Distance (<=>)</span>
+            <span>&bull;</span>
+            <span>Top-4 Semantic Chunks</span>
+        </div>
+    </div>
+
+    <!-- Chat Messages Scroll Area -->
+    <div class="flex-1 overflow-y-auto space-y-6 pr-2 mb-4" x-ref="chatBox">
+        
+        <!-- Welcome Prompt Starters -->
+        <template x-if="messages.length === 0">
+            <div class="h-full flex flex-col items-center justify-center text-center p-6 space-y-6 my-auto">
+                <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-brand-500/20">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h2 class="text-lg font-bold text-white">Ask your Tenant Documents</h2>
+                    <p class="text-xs text-slate-400 mt-1 max-w-md">
+                        Queries perform high-dimensional vector similarity retrieval across pgvector chunks with strict multi-tenant boundary isolation.
+                    </p>
+                </div>
+
+                <!-- Prompt Suggestion Chips -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-xl text-left">
+                    <button @click="sendQuery('What was the total gross revenue and net operating margin in Q3?')"
+                            class="p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-brand-500/50 hover:bg-slate-800/60 transition text-xs text-slate-300 group">
+                        <span class="text-brand-400 font-semibold block mb-0.5">Financial Metrics</span>
+                        "What was the total gross revenue and net operating margin in Q3?"
+                    </button>
+                    <button @click="sendQuery('What are the cloud security, encryption at rest, and TLS standards?')"
+                            class="p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-brand-500/50 hover:bg-slate-800/60 transition text-xs text-slate-300 group">
+                        <span class="text-indigo-400 font-semibold block mb-0.5">Security Architecture</span>
+                        "What are the cloud security, encryption at rest, and TLS standards?"
+                    </button>
+                    <button @click="sendQuery('What is the guaranteed monthly uptime and RPO/RTO in the SLA?')"
+                            class="p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-brand-500/50 hover:bg-slate-800/60 transition text-xs text-slate-300 group">
+                        <span class="text-emerald-400 font-semibold block mb-0.5">SLA & Recovery</span>
+                        "What is the guaranteed monthly uptime and RPO/RTO in the SLA?"
+                    </button>
+                    <button @click="sendQuery('Summarize the revenue breakdown across all business divisions.')"
+                            class="p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-brand-500/50 hover:bg-slate-800/60 transition text-xs text-slate-300 group">
+                        <span class="text-purple-400 font-semibold block mb-0.5">Division Breakdown</span>
+                        "Summarize the revenue breakdown across all business divisions."
+                    </button>
+                </div>
+            </div>
+        </template>
+
+        <!-- Conversation History Loop -->
+        <template x-for="(msg, index) in messages" :key="index">
+            <div class="space-y-3">
+                
+                <!-- User Question Bubble -->
+                <template x-if="msg.role === 'user'">
+                    <div class="flex items-start gap-3 justify-end">
+                        <div class="max-w-2xl p-4 rounded-2xl rounded-tr-none bg-brand-600 text-white text-sm shadow-md font-medium leading-relaxed">
+                            <span x-text="msg.content"></span>
+                        </div>
+                        <div class="w-8 h-8 rounded-full bg-slate-800 text-slate-300 border border-slate-700 flex items-center justify-center text-xs font-bold shrink-0">
+                            You
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Assistant Grounded Answer Bubble -->
+                <template x-if="msg.role === 'assistant'">
+                    <div class="flex items-start gap-3">
+                        <div class="w-8 h-8 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center shrink-0 shadow-inner">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        </div>
+
+                        <div class="flex-1 max-w-3xl space-y-3">
+                            <div class="p-5 rounded-2xl rounded-tl-none bg-slate-900/90 border border-slate-800 shadow-lg text-sm text-slate-200 leading-relaxed space-y-3">
+                                <!-- Markdown Parsed Body -->
+                                <div class="prose prose-invert prose-sm max-w-none" x-html="renderMarkdown(msg.content)"></div>
+
+                                <!-- Metadata Footer: Latency & Tokens -->
+                                <div class="pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+                                    <div class="flex items-center gap-3">
+                                        <span class="flex items-center gap-1 font-mono text-brand-400">
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                            <span x-text="msg.tokens_used + ' tokens'"></span>
+                                        </span>
+                                        <span>&bull;</span>
+                                        <span x-text="msg.latency_ms + ' ms latency'"></span>
+                                    </div>
+                                    <span class="text-slate-500">pgvector Cosine Search</span>
+                                </div>
+                            </div>
+
+                            <!-- Interactive Source Citation Badge Pills -->
+                            <template x-if="msg.citations && msg.citations.length > 0">
+                                <div class="space-y-1.5">
+                                    <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                                        <svg class="w-3 h-3 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+                                        <span>Verified Source Citations (Click to view excerpt):</span>
+                                    </div>
+                                    <div class="flex flex-wrap gap-2">
+                                        <template x-for="c in msg.citations" :key="c.source_id">
+                                            <button @click="openCitationModal(c)"
+                                                    class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700/80 hover:border-brand-500 hover:bg-slate-800 text-xs font-medium text-slate-300 transition shadow-sm group">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-brand-400 group-hover:scale-125 transition"></span>
+                                                <span class="text-white truncate max-w-[200px]" x-text="c.document_title"></span>
+                                                <span class="text-brand-300 font-mono text-[11px]" x-text="'Pg ' + c.page_number"></span>
+                                                <span class="px-1.5 py-0.2 rounded text-[10px] bg-slate-800 text-slate-400 group-hover:text-emerald-400" x-text="c.similarity_percent + '%'"></span>
+                                            </button>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+
+                        </div>
+                    </div>
+                </template>
+
+            </div>
+        </template>
+
+        <!-- Loading Spinner Indicator -->
+        <div x-show="loading" x-cloak class="flex items-start gap-3">
+            <div class="w-8 h-8 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center shrink-0">
+                <svg class="w-4 h-4 animate-spin text-indigo-400" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+            </div>
+            <div class="p-4 rounded-2xl rounded-tl-none bg-slate-900/60 border border-slate-800 text-sm text-slate-400 flex items-center gap-2.5">
+                <span class="w-2 h-2 rounded-full bg-brand-400 animate-pulse"></span>
+                <span>Executing Cosine Similarity vector search & synthesizing grounded response...</span>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Input Bar Area -->
+    <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl">
+        <form @submit.prevent="submitQuestion" class="flex items-center gap-3">
+            <textarea x-model="questionInput" 
+                      @keydown.enter.prevent="if(!$event.shiftKey) submitQuestion()"
+                      rows="1" 
+                      placeholder="Ask a question across {{ active_tenant.name }} documents (Press Enter to submit)..." 
+                      class="flex-1 bg-transparent border-0 focus:ring-0 text-sm text-white placeholder-slate-500 resize-none py-1.5"
+                      :disabled="loading"></textarea>
+            
+            <button type="submit" 
+                    :disabled="loading || !questionInput.trim()"
+                    class="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium transition shadow-md shadow-brand-600/30 flex items-center gap-2">
+                <span>Query</span>
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+            </button>
+        </form>
+    </div>
+
+    <!-- Interactive Citation Modal -->
+    <div x-show="activeCitation" x-cloak 
+         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm"
+         @keydown.escape.window="activeCitation = null">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4"
+             @click.away="activeCitation = null">
+            
+            <div class="flex items-start justify-between pb-3 border-b border-slate-800">
+                <div>
+                    <span class="text-[10px] font-semibold uppercase tracking-wider text-brand-400 block mb-1">
+                        Exact Vector Source Citation
+                    </span>
+                    <h3 class="text-base font-bold text-white" x-text="activeCitation?.document_title"></h3>
+                    <div class="flex items-center gap-3 text-xs text-slate-400 mt-1">
+                        <span x-text="'Page Number: ' + activeCitation?.page_number"></span>
+                        <span>&bull;</span>
+                        <span x-text="'Chunk Index: #' + activeCitation?.chunk_index"></span>
+                        <span>&bull;</span>
+                        <span class="text-emerald-400 font-medium" x-text="'Cosine Similarity: ' + activeCitation?.similarity_percent + '%'"></span>
+                    </div>
+                </div>
+                <button @click="activeCitation = null" class="text-slate-400 hover:text-white p-1 rounded-lg">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+
+            <!-- Full Excerpt Box -->
+            <div class="space-y-1.5">
+                <span class="text-xs font-semibold text-slate-400">Verbatim Chunk Excerpt:</span>
+                <div class="p-4 rounded-xl bg-slate-950 border border-slate-800/80 text-sm font-mono text-slate-300 leading-relaxed max-h-72 overflow-y-auto whitespace-pre-wrap selection:bg-brand-500/30"
+                     x-text="activeCitation?.excerpt"></div>
+            </div>
+
+            <div class="pt-2 flex justify-end">
+                <button @click="activeCitation = null" 
+                        class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition">
+                    Close Citation
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function ragChat() {
+    return {
+        messages: [],
+        questionInput: '',
+        loading: false,
+        activeCitation: null,
+
+        renderMarkdown(content) {
+            return marked.parse(content || '');
+        },
+
+        openCitationModal(citation) {
+            this.activeCitation = citation;
+        },
+
+        sendQuery(presetQuestion) {
+            this.questionInput = presetQuestion;
+            this.submitQuestion();
+        },
+
+        async submitQuestion() {
+            const q = this.questionInput.trim();
+            if (!q || this.loading) return;
+
+            // Push user message
+            this.messages.push({
+                role: 'user',
+                content: q
+            });
+
+            this.questionInput = '';
+            this.loading = true;
+            this.scrollToBottom();
+
+            try {
+                const response = await fetch('/api/v1/chat/query/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}',
+                        'X-Tenant-ID': '{{ active_tenant.id }}'
+                    },
+                    body: JSON.stringify({
+                        question: q,
+                        top_k: 4
+                    })
+                });
+
+                if (response.status === 429) {
+                    const err = await response.json();
+                    this.messages.push({
+                        role: 'assistant',
+                        content: `⚠️ **Tenant Quota Exceeded**: ${err.detail || 'Monthly token allowance depleted. Please upgrade plan.'}`,
+                        citations: [],
+                        tokens_used: 0,
+                        latency_ms: 0
+                    });
+                } else if (!response.ok) {
+                    const err = await response.json();
+                    this.messages.push({
+                        role: 'assistant',
+                        content: `❌ **Error**: ${err.detail || err.error || 'Failed to process query.'}`,
+                        citations: [],
+                        tokens_used: 0,
+                        latency_ms: 0
+                    });
+                } else {
+                    const data = await response.json();
+                    this.messages.push({
+                        role: 'assistant',
+                        content: data.answer,
+                        citations: data.citations || [],
+                        tokens_used: data.tokens_used,
+                        latency_ms: data.latency_ms
+                    });
+                }
+            } catch (err) {
+                this.messages.push({
+                    role: 'assistant',
+                    content: `❌ **Network Failure**: ${err.message}`,
+                    citations: [],
+                    tokens_used: 0,
+                    latency_ms: 0
+                });
+            } finally {
+                this.loading = false;
+                this.scrollToBottom();
+            }
+        },
+
+        scrollToBottom() {
+            this.$nextTick(() => {
+                if (this.$refs.chatBox) {
+                    this.$refs.chatBox.scrollTop = this.$refs.chatBox.scrollHeight;
+                }
+            });
+        }
+    }
+}
+</script>
+{% endblock %}

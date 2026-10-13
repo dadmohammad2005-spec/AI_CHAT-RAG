@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}DocuRAG Enterprise | Multi-Tenant AI Engine{% endblock %}</title>
+
+    <!-- Tailwind CSS CDN with Typography & Forms plugins -->
+    <script src="https://cdn.tailwindcss.com?plugins=typography,forms"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            400: '#818cf8',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                            900: '#312e81',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- HTMX for reactive updates -->
+    <script src="https://unpkg.com/htmx.org@1.9.11"></script>
+
+    <!-- Alpine.js for client-side interactivity -->
+    <script defer src="https://unpkg.com/alpinejs@3.13.7/dist/cdn.min.js"></script>
+
+    <!-- Marked.js for Markdown parsing in chat -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <!-- Google Inter Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        code, pre { font-family: 'JetBrains Mono', monospace; }
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="h-full flex overflow-hidden antialiased bg-slate-950 text-slate-100" x-data="{ sidebarOpen: false }">
+
+    <!-- Mobile Sidebar Backdrop -->
+    <div x-show="sidebarOpen" x-cloak class="fixed inset-0 z-40 bg-slate-900/80 backdrop-blur-sm lg:hidden" @click="sidebarOpen = false"></div>
+
+    <!-- Sidebar Navigation -->
+    <aside class="fixed inset-y-0 left-0 z-50 w-72 bg-slate-900 border-r border-slate-800 flex flex-col justify-between transition-transform duration-200 transform lg:static lg:translate-x-0"
+           :class="sidebarOpen ? 'translate-x-0' : '-translate-x-0 max-lg:-translate-x-full'">
+        
+        <div>
+            <!-- App Brand & Logo -->
+            <div class="h-16 flex items-center justify-between px-6 border-b border-slate-800 bg-slate-900/60">
+                <a href="{% url 'web:dashboard' %}" class="flex items-center gap-3 group">
+                    <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-400 flex items-center justify-center shadow-lg shadow-brand-500/20 group-hover:scale-105 transition">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <span class="font-bold text-base tracking-tight text-white block">DocuRAG</span>
+                        <span class="text-[10px] uppercase font-semibold tracking-wider text-brand-400 block -mt-1">Multi-Tenant AI</span>
+                    </div>
+                </a>
+                <button @click="sidebarOpen = false" class="lg:hidden text-slate-400 hover:text-white">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+
+            <!-- Tenant Selector Dropdown -->
+            <div class="p-4 border-b border-slate-800/80">
+                <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5 px-2 flex items-center justify-between">
+                    <span>Active Tenant Space</span>
+                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-brand-500/10 text-brand-400 border border-brand-500/20">
+                        {{ active_tenant.plan|default:"Pro" }}
+                    </span>
+                </div>
+                <div class="relative" x-data="{ tenantMenu: false }">
+                    <button @click="tenantMenu = !tenantMenu" 
+                            class="w-full flex items-center justify-between px-3 py-2.5 rounded-lg bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 text-sm font-medium text-white transition">
+                        <div class="flex items-center gap-2.5 truncate">
+                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                            <span class="truncate">{{ active_tenant.name|default:"Acme Corporation" }}</span>
+                        </div>
+                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    </button>
+
+                    <!-- Dropdown menu -->
+                    <div x-show="tenantMenu" @click.away="tenantMenu = false" x-cloak
+                         class="absolute left-0 right-0 mt-1 py-1 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50">
+                        <div class="px-3 py-1.5 text-[10px] font-semibold uppercase text-slate-400 border-b border-slate-700/50">Switch Organization</div>
+                        {% for t in all_tenants %}
+                        <a href="{% url 'web:switch-tenant' t.id %}" 
+                           class="flex items-center justify-between px-3 py-2 text-xs hover:bg-slate-700/70 transition {% if t.id == active_tenant.id %}text-brand-400 font-semibold bg-slate-700/40{% else %}text-slate-200{% endif %}">
+                            <span class="truncate">{{ t.name }}</span>
+                            <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-900 text-slate-400">{{ t.plan }}</span>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Primary Navigation Links -->
+            <nav class="p-3 space-y-1">
+                <a href="{% url 'web:dashboard' %}" 
+                   class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {% if request.resolver_match.url_name == 'dashboard' or request.resolver_match.url_name == 'index' %}bg-brand-600/15 text-brand-400 border border-brand-500/20{% else %}text-slate-300 hover:bg-slate-800/60 hover:text-white{% endif %}">
+                    <svg class="w-5 h-5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
+                    </svg>
+                    <span>Dashboard</span>
+                </a>
+
+                <a href="{% url 'web:documents' %}" 
+                   class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {% if request.resolver_match.url_name == 'documents' %}bg-brand-600/15 text-brand-400 border border-brand-500/20{% else %}text-slate-300 hover:bg-slate-800/60 hover:text-white{% endif %}">
+                    <svg class="w-5 h-5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    <span>Document Manager</span>
+                </a>
+
+                <a href="{% url 'web:chat' %}" 
+                   class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {% if request.resolver_match.url_name == 'chat' %}bg-brand-600/15 text-brand-400 border border-brand-500/20{% else %}text-slate-300 hover:bg-slate-800/60 hover:text-white{% endif %}">
+                    <svg class="w-5 h-5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+                    </svg>
+                    <span>AI Chat & RAG Query</span>
+                </a>
+            </nav>
+        </div>
+
+        <!-- Bottom Sidebar: Token Usage & User profile -->
+        <div class="p-4 border-t border-slate-800 space-y-4">
+            <!-- Token Quota Widget -->
+            <div class="p-3 rounded-xl bg-slate-950/60 border border-slate-800">
+                <div class="flex items-center justify-between text-xs font-medium mb-1.5">
+                    <span class="text-slate-400">Monthly Tokens</span>
+                    <span class="text-slate-200 font-mono text-[11px]">
+                        {{ active_tenant.tokens_consumed|default:0 }} / {{ active_tenant.monthly_token_limit|default:100000 }}
+                    </span>
+                </div>
+                <!-- Progress bar -->
+                <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                    <div class="bg-gradient-to-r from-brand-500 to-indigo-400 h-2 rounded-full transition-all duration-500" 
+                         style="width: {{ active_tenant.token_quota_percent|default:5 }}%;"></div>
+                </div>
+                <div class="flex items-center justify-between text-[10px] text-slate-500 mt-1.5">
+                    <span>{{ active_tenant.token_quota_percent|default:0 }}% utilized</span>
+                    <span class="text-emerald-400 font-medium">pgvector active</span>
+                </div>
+            </div>
+
+            <!-- User profile -->
+            <div class="flex items-center justify-between pt-1">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-full bg-brand-500/20 text-brand-400 border border-brand-500/30 flex items-center justify-center font-bold text-xs">
+                        PA
+                    </div>
+                    <div class="truncate">
+                        <div class="text-xs font-medium text-white truncate">{{ request.user.full_name|default:"Principal Architect" }}</div>
+                        <div class="text-[10px] text-slate-400 truncate">{{ request.user.email|default:"admin@example.com" }}</div>
+                    </div>
+                </div>
+                <a href="/admin/" title="Django Admin" class="text-slate-500 hover:text-slate-300">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                </a>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <div class="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-950">
+        <!-- Top bar for mobile toggle and breadcrumbs -->
+        <header class="h-16 border-b border-slate-800 bg-slate-900/50 flex items-center justify-between px-6 lg:px-8">
+            <div class="flex items-center gap-4">
+                <button @click="sidebarOpen = true" class="lg:hidden text-slate-400 hover:text-white p-1">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                </button>
+                <div class="flex items-center gap-2 text-sm">
+                    <span class="text-slate-400">Tenant:</span>
+                    <span class="font-semibold text-white">{{ active_tenant.name|default:"Acme Corporation" }}</span>
+                    <span class="text-slate-600">/</span>
+                    <span class="text-slate-300 font-medium">{% block page_title %}Dashboard{% endblock %}</span>
+                </div>
+            </div>
+
+            <!-- Status Indicator -->
+            <div class="flex items-center gap-3">
+                <div class="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>Celery Workers Online</span>
+                </div>
+                <div class="hidden md:flex items-center gap-2 px-3 py-1 rounded-full bg-brand-500/10 border border-brand-500/20 text-brand-300 text-xs">
+                    <span>pgvector 1536-dim</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Dynamic Content Body -->
+        <main class="flex-1 overflow-y-auto p-6 lg:p-8">
+            {% if messages %}
+            <div class="mb-6 space-y-2">
+                {% for message in messages %}
+                <div class="p-3 rounded-lg text-sm bg-brand-500/20 text-brand-200 border border-brand-500/30 flex items-center justify-between">
+                    <span>{{ message }}</span>
+                    <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-white">&times;</button>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>
